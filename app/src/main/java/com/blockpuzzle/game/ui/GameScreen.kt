@@ -131,9 +131,15 @@ fun GameScreen(viewModel: GameViewModel, modifier: Modifier = Modifier) {
         }
     }
 
-    val dragTarget: DragTarget? = remember(drag, boardOrigin, boardCell, state) {
-        val session = drag ?: return@remember null
-        if (boardCell <= 0f) return@remember null
+    // Resolved on demand rather than captured in a composition local.
+    //
+    // The gesture callbacks below run inside a long-lived `pointerInput` coroutine that is
+    // not restarted while a drag is in flight, so they keep the closure they were created
+    // with — the one from the frame where the finger went down. Anything they read has to
+    // be a live state read; a plain `val` computed during composition would be stale by the
+    // time the finger lifts, and the drop would always resolve against the pre-drag frame.
+    fun targetFor(session: DragSession): DragTarget? {
+        if (boardCell <= 0f) return null
         val pieceWidth = session.piece.width * boardCell
         val pieceHeight = session.piece.height * boardCell
         val topLeftX = session.pointer.x - session.grab.x * pieceWidth
@@ -150,8 +156,10 @@ fun GameScreen(viewModel: GameViewModel, modifier: Modifier = Modifier) {
                 cols = it.cols,
             )
         }
-        DragTarget(row, col, ghost)
+        return DragTarget(row, col, ghost)
     }
+
+    val dragTarget: DragTarget? = drag?.let { targetFor(it) }
 
     Box(
         modifier = modifier
@@ -198,7 +206,7 @@ fun GameScreen(viewModel: GameViewModel, modifier: Modifier = Modifier) {
                 trayDescription = stringResource(R.string.cd_tray),
                 onDragStart = { index, pointer, grab ->
                     val piece = viewModel.pieceAt(index)
-                    if (piece != null && !state.isOver) {
+                    if (piece != null && !viewModel.state.isOver) {
                         drag = DragSession(index, piece, pointer, grab)
                     }
                 },
@@ -207,9 +215,11 @@ fun GameScreen(viewModel: GameViewModel, modifier: Modifier = Modifier) {
                 },
                 onDragEnd = {
                     val session = drag
-                    val target = dragTarget
-                    if (session != null && target?.ghost != null) {
-                        viewModel.place(session.trayIndex, target.row, target.col)
+                    if (session != null) {
+                        val target = targetFor(session)
+                        if (target?.ghost != null) {
+                            viewModel.place(session.trayIndex, target.row, target.col)
+                        }
                     }
                     drag = null
                 },
