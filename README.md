@@ -77,6 +77,36 @@ full line, monotonic score, combo bookkeeping, unique piece identities, save/res
 
 Requires Android Studio (Ladybug or newer) or a local Android SDK with API 35.
 
+### JDK requirement
+
+**Build on JDK 21 or 17. JDK 22+ will not work.**
+
+The Kotlin DSL compiler bundled in Gradle 8.11.1, the Kotlin Gradle Plugin 2.0.21 and AGP
+8.7.3 all reject newer version strings. On JDK 25 the build fails while compiling the
+`.kts` scripts, with nothing but the version number as the error message:
+
+```
+* What went wrong:
+25.0.4
+```
+
+`gradle/gradle-daemon-jvm.properties` pins the Gradle JVM to 21, so a matching JDK is picked
+automatically when one is installed. If it is missing you get a message that says so plainly
+instead of the cryptic failure above.
+
+Installing one, if needed:
+
+```bash
+sudo dnf install java-21-openjdk-devel     # Fedora / RHEL
+sudo apt install openjdk-21-jdk            # Debian / Ubuntu
+brew install openjdk@21                    # macOS
+```
+
+In Android Studio the bundled JetBrains Runtime already satisfies this; check it under
+*Settings → Build, Execution, Deployment → Build Tools → Gradle → Gradle JDK*.
+
+### Commands
+
 ```bash
 ./gradlew :engine:test        # rules engine unit tests
 ./gradlew :app:assembleDebug  # debug APK -> app/build/outputs/apk/debug/
