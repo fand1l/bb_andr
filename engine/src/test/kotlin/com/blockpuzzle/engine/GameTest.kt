@@ -282,20 +282,53 @@ class GameFlowTest {
 
 class GeneratorFairnessTest {
 
-    @Test
-    fun `a fresh tray always contains a placeable piece on a cramped board`() {
-        // Board leaves exactly one free 2x2 pocket, so most silhouettes will not fit.
+    /** A board with every cell filled except the given ones. */
+    private fun boardFreeing(vararg free: Pair<Int, Int>): Board {
         val cells = CharArray(64) { '1' }
-        for (r in 6 until 8) for (c in 6 until 8) cells[r * 8 + c] = '0'
-        val cramped = requireNotNull(Board.decode(String(cells)))
+        for ((r, c) in free) cells[r * 8 + c] = '0'
+        return requireNotNull(Board.decode(String(cells)))
+    }
 
-        repeat(200) { seed ->
-            val gen = PieceGenerator(random = Random(seed))
-            val tray = gen.nextTray(cramped)
+    @Test
+    fun `every tray dealt on an open board can be emptied`() {
+        val empty = Board.empty()
+        repeat(300) { seed ->
+            val tray = PieceGenerator(random = Random(seed)).nextTray(empty)
             assertEquals(PieceGenerator.TRAY_SIZE, tray.size)
             assertTrue(
-                tray.any { cramped.hasPlacement(it) },
-                "seed $seed dealt a dead tray: ${tray.map { it.shape.id }}",
+                TraySolver.canPlaceAll(empty, tray),
+                "seed $seed dealt an unplayable tray: ${tray.map { it.shape.id }}",
+            )
+        }
+    }
+
+    @Test
+    fun `every tray dealt on a cramped board can still be emptied`() {
+        // Only a 2x2 pocket is free, so almost every silhouette is out of the question and
+        // the dealer has to fall back on simulating the board forward.
+        val cramped = boardFreeing(6 to 6, 6 to 7, 7 to 6, 7 to 7)
+
+        repeat(300) { seed ->
+            val tray = PieceGenerator(random = Random(seed)).nextTray(cramped)
+            assertEquals(PieceGenerator.TRAY_SIZE, tray.size)
+            assertTrue(
+                TraySolver.canPlaceAll(cramped, tray),
+                "seed $seed dealt an unplayable tray: ${tray.map { it.shape.id }}",
+            )
+        }
+    }
+
+    @Test
+    fun `every tray dealt with a single free cell can still be emptied`() {
+        // The tightest board the game can ever be sitting on. Filling the last cell wipes a
+        // row and a column, so a solvable tray does exist — the dealer has to find it.
+        val onePocket = boardFreeing(3 to 5)
+
+        repeat(200) { seed ->
+            val tray = PieceGenerator(random = Random(seed)).nextTray(onePocket)
+            assertTrue(
+                TraySolver.canPlaceAll(onePocket, tray),
+                "seed $seed dealt an unplayable tray: ${tray.map { it.shape.id }}",
             )
         }
     }
@@ -311,13 +344,52 @@ class GeneratorFairnessTest {
     }
 
     @Test
+    fun `the deal still varies rather than collapsing onto one safe silhouette`() {
+        val empty = Board.empty()
+        val seen = HashSet<String>()
+        repeat(300) { seed ->
+            PieceGenerator(random = Random(seed)).nextTray(empty).forEach { seen += it.shape.id }
+        }
+        assertTrue(seen.size > Shapes.ALL.size / 2, "only ${seen.size} silhouettes ever appeared")
+    }
+
+    @Test
     fun `unfair generation is allowed to deal a dead tray`() {
-        val cells = CharArray(64) { '1' }
-        cells[0] = '0'
-        val nearlyFull = requireNotNull(Board.decode(String(cells)))
+        val nearlyFull = boardFreeing(0 to 0)
         val gen = PieceGenerator(random = Random(42), fair = false)
         val anyDead = (0 until 50).any { gen.nextTray(nearlyFull).none { p -> nearlyFull.hasPlacement(p) } }
         assertTrue(anyDead, "with fairness off a dead tray must be reachable")
+    }
+
+    @Test
+    fun `the fairness flag survives a restart`() {
+        // A regression guard: newGame() and restore() used to rebuild the dealer with
+        // fairness hard-coded on, so `fairDeals = false` silently stopped applying after
+        // the opening tray and the two modes became indistinguishable.
+        fun unsolvableDeals(fair: Boolean): Int {
+            var count = 0
+            for (seed in 0 until 60) {
+                val rng = Random(seed)
+                val game = BlockPuzzleGame(random = Random(seed), fairDeals = fair)
+                var state = game.newGame()
+                var guard = 0
+                while (!state.isOver && guard++ < 400) {
+                    val options = state.tray.withIndex().filter { it.value != null }
+                        .flatMap { (i, p) -> state.board.placements(p!!.cells).map { i to it } }
+                    if (options.isEmpty()) break
+                    val (slot, at) = options[rng.nextInt(options.size)]
+                    val move = game.place(slot, at.row, at.col) ?: break
+                    state = game.state
+                    if (move.trayRefilled && !TraySolver.canPlaceAll(state.board, state.trayPieces)) {
+                        count++
+                    }
+                }
+            }
+            return count
+        }
+
+        assertEquals(0, unsolvableDeals(fair = true), "fair deals must always be emptyable")
+        assertTrue(unsolvableDeals(fair = false) > 0, "unfair deals must be able to strand the player")
     }
 
     @Test
@@ -399,6 +471,11 @@ class RandomPlaythroughTest {
             var previousScore = 0
             var guard = 0
 
+            assertTrue(
+                TraySolver.canPlaceAll(state.board, state.trayPieces),
+                "seed $seed: the opening tray cannot be emptied",
+            )
+
             while (!state.isOver && guard < 5_000) {
                 guard++
                 val options = state.tray.withIndex()
@@ -437,6 +514,16 @@ class RandomPlaythroughTest {
                 assertEquals(PieceGenerator.TRAY_SIZE, state.tray.size)
                 assertTrue(state.trayPieces.map { it.uid }.toSet().size == state.trayPieces.size)
                 assertEquals(state.isDead(), state.isOver)
+
+                if (move.trayRefilled) {
+                    // The dealer's promise: a freshly dealt tray always has a way out.
+                    assertTrue(
+                        TraySolver.canPlaceAll(state.board, state.trayPieces),
+                        "seed $seed: dealt a tray that cannot be emptied\n${state.board}" +
+                            state.trayPieces.map { it.shape.id },
+                    )
+                    assertFalse(state.isOver, "seed $seed: a fresh deal must never be game over")
+                }
             }
 
             assertTrue(guard < 5_000, "seed $seed: game never terminated")

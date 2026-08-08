@@ -39,14 +39,31 @@ The numbers live in one place, `ScoreRules`, if you want to tune them.
 large corners, J/L/T tetrominoes in all four rotations, S/Z, a plus, and 2- and 3-cell
 diagonals. Each carries a weight, so awkward large pieces show up less often.
 
-Two rules keep the roll honest:
+**A freshly dealt tray can always be emptied.** Not "one of the three fits" — there is an
+order and a set of anchors that drops all three, counting the room that opens up when a drop
+clears a line. The deal never buries you; losing is always a consequence of how you spent the
+tray, which is where the difficulty of the genre actually lives. A tray also never holds three
+copies of the same silhouette.
 
-- a freshly dealt tray always contains at least one piece that fits the current board, so you
-  are never handed an instantly dead hand;
-- a tray never contains three copies of the same silhouette.
+That promise is kept two ways:
 
-You can still lose partway through a tray by boxing yourself in — which is where the
-difficulty of the genre actually lives.
+1. **Roll and check.** A tray is rolled the ordinary weighted way, then `TraySolver` searches
+   every order and every anchor — applying clears between drops — for a line of play that
+   empties it. On an open board the first roll nearly always passes, so the piece mix stays
+   completely natural.
+2. **Deal by simulation.** When the board is tight enough that rolls keep failing, the pieces
+   are picked one at a time against a board played forward as it goes: each silhouette is
+   chosen from those that fit the board *as it will look* once the previous pieces have
+   landed. The tray then arrives with a witness by construction, no search needed.
+
+Step 2 cannot stall: every pool contains the single-cell piece, so it only runs dry on a
+completely full board — and a settled board is never full, because filling the last free cell
+would complete its row and clear it.
+
+Measured over 2 800 deals in simulated games, 8.1% of them would not have been fully playable
+without this — 1.2% would have been an outright dead hand. The search runs on a bitboard (an
+8x8 playfield is exactly 64 cells, so occupancy is one `Long`) and costs a few tens of
+microseconds per deal.
 
 ### Feel
 

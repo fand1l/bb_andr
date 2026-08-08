@@ -16,7 +16,7 @@ class BlockPuzzleGame(
     private val random: Random = Random.Default,
     private val rules: ScoreRules = ScoreRules(),
     private val boardSize: Int = BOARD_SIZE,
-    fairDeals: Boolean = true,
+    private val fairDeals: Boolean = true,
 ) {
 
     private var generator = PieceGenerator(random = random, fair = fairDeals)
@@ -55,7 +55,7 @@ class BlockPuzzleGame(
         piecesPlaced = 0
         over = false
         best = keepBest
-        generator = PieceGenerator(random = random, fair = true, uidSeed = generator.lastUid + 1)
+        generator = PieceGenerator(random = random, fair = fairDeals, uidSeed = generator.lastUid + 1)
         tray = generator.nextTray(board).toMutableList<Piece?>()
         over = state.isDead()
         return state
@@ -71,7 +71,7 @@ class BlockPuzzleGame(
         bestCombo = snapshot.bestCombo
         linesCleared = snapshot.linesCleared
         piecesPlaced = snapshot.piecesPlaced
-        generator = PieceGenerator(random = random, fair = true, uidSeed = nextUid)
+        generator = PieceGenerator(random = random, fair = fairDeals, uidSeed = nextUid)
         over = snapshot.isOver || state.isDead()
     }
 

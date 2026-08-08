@@ -97,11 +97,15 @@ class Board private constructor(
      * @throws IllegalArgumentException when the placement is illegal — callers are
      *   expected to have asked [canPlace] first.
      */
-    fun place(piece: Piece, row: Int, col: Int): Board {
-        require(canPlace(piece, row, col)) { "Illegal placement of ${piece.shape.id} at ($row,$col)" }
+    fun place(piece: Piece, row: Int, col: Int): Board =
+        place(piece.cells, row, col, piece.colorId)
+
+    /** Stamps a bare silhouette. Used when simulating a board that is not being shown. */
+    fun place(shapeCells: List<CellOffset>, row: Int, col: Int, colorId: Int): Board {
+        require(canPlace(shapeCells, row, col)) { "Illegal placement at ($row,$col)" }
         val next = cells.copyOf()
-        for (cell in piece.cells) {
-            next[index(row + cell.row, col + cell.col)] = piece.colorId
+        for (cell in shapeCells) {
+            next[index(row + cell.row, col + cell.col)] = colorId
         }
         return Board(size, next)
     }
@@ -139,6 +143,14 @@ class Board private constructor(
         }
         return ClearResult(Board(size, next), wiped.toList())
     }
+
+    /**
+     * Applies every clear the board currently has pending.
+     *
+     * A settled board can never be completely full: filling the last free cell would
+     * complete its row, which clears. The dealer leans on that — see [TraySolver].
+     */
+    fun settled(): ClearResult = clearLines(fullRows(), fullCols())
 
     /** Compact save format: one digit per cell, row-major. */
     fun encode(): String {
