@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Block Puzzle</string>
+
+    <string name="best">Рекорд</string>
+    <string name="combo_value">Комбо x%1$d</string>
+    <string name="all_clear">Поле чисте!</string>
+
+    <string name="game_over">Гру завершено</string>
+    <string name="game_over_no_moves">Жодна фігура більше не вміщається</string>
+    <string name="new_best">Новий рекорд!</string>
+    <string name="play_again">Грати ще</string>
+    <string name="close">Закрити</string>
+
+    <string name="stats_lines">Знищено ліній</string>
+    <string name="stats_pieces">Поставлено фігур</string>
+    <string name="stats_best_combo">Найдовше комбо</string>
+
+    <string name="settings">Налаштування</string>
+    <string name="sound">Звукові ефекти</string>
+    <string name="haptics">Вібрація</string>
+    <string name="restart">Почати заново</string>
+    <string name="reset_best">Скинути рекорд</string>
+    <string name="no_ads_note">Без реклами, без трекерів, без доступу до мережі.</string>
+
+    <string name="cd_settings">Відкрити налаштування</string>
+    <string name="cd_restart">Почати заново</string>
+    <string name="cd_board">Ігрове поле</string>
+    <string name="cd_tray">Фігури для розміщення</string>
+</resources>

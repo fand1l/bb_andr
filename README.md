@@ -1,1 +1,90 @@
-# bb_andr
+# Block Puzzle
+
+An offline Android block-puzzle game in the Block Blast style — the same core loop, none of
+the advertising. Written in Kotlin with Jetpack Compose.
+
+**No ads, no tracking, no analytics, no in-app purchases.** The manifest does not request
+`INTERNET`, so the app physically cannot reach the network. The only permission it asks for
+is `VIBRATE`.
+
+## Gameplay
+
+The loop is the genre standard, implemented in full:
+
+- **8x8 playfield.** Pieces are dragged from a tray of three onto any free space that fits.
+  They cannot be rotated — placement is the whole puzzle.
+- **Three pieces at a time.** A new set of three is dealt only once all three have been used,
+  so the order you spend them in matters.
+- **Rows and columns clear.** Any full row *and* any full column go at the same time; a drop
+  that completes both is worth two lines, and the shared cell is counted once.
+- **Combos.** Clearing on consecutive drops raises a combo level that multiplies the clear
+  bonus (+50% per level, plateauing at level 10).
+- **All clear bonus.** Emptying the board pays a flat 300 on top.
+- **Game over** when none of the pieces still in the tray fits anywhere.
+
+### Scoring
+
+| Event | Points |
+| --- | --- |
+| Placing a piece | 1 per cell |
+| Clearing *n* lines at once | `10 · n(n+1)/2` → 10 / 30 / 60 / 100 … |
+| Combo level *c* | multiplies the clear bonus by `1 + 0.5(c−1)`, capped at *c* = 10 |
+| Board left empty | +300 |
+
+The numbers live in one place, `ScoreRules`, if you want to tune them.
+
+### Piece dealing
+
+44 silhouettes: 1–5 cell bars in both orientations, 2x2 / 2x3 / 3x2 / 3x3 blocks, small and
+large corners, J/L/T tetrominoes in all four rotations, S/Z, a plus, and 2- and 3-cell
+diagonals. Each carries a weight, so awkward large pieces show up less often.
+
+Two rules keep the roll honest:
+
+- a freshly dealt tray always contains at least one piece that fits the current board, so you
+  are never handed an instantly dead hand;
+- a tray never contains three copies of the same silhouette.
+
+You can still lose partway through a tray by boxing yourself in — which is where the
+difficulty of the genre actually lives.
+
+### Feel
+
+- The held piece floats about one cell above your finger and keeps the grab point you picked
+  up, so it never snaps awkwardly to a corner.
+- The target cells are previewed on the board, and any row or column the drop would complete
+  lights up before you let go.
+- Dropped blocks pop in; cleared blocks expand and fade out.
+- Procedurally synthesised sound effects (no bundled audio assets) with pitch that climbs
+  through a combo, plus vibration. Both can be switched off.
+- Your run is saved after every move, so closing the app mid-game loses nothing.
+- English and Ukrainian localisation.
+
+## Project layout
+
+```
+engine/   Pure Kotlin/JVM rules engine — board, pieces, dealing, scoring, save format.
+          No Android dependencies, covered by unit tests.
+app/      Android app: Compose UI, drag and drop, animations, sound, persistence.
+```
+
+Keeping the rules in a plain JVM module is what makes them testable without an emulator.
+`engine/src/test` holds 40 tests, including a fuzz pass that plays 120 complete games with
+random legal drops and asserts the invariants on every turn (cell accounting, no surviving
+full line, monotonic score, combo bookkeeping, unique piece identities, save/restore parity).
+
+## Building
+
+Requires Android Studio (Ladybug or newer) or a local Android SDK with API 35.
+
+```bash
+./gradlew :engine:test        # rules engine unit tests
+./gradlew :app:assembleDebug  # debug APK -> app/build/outputs/apk/debug/
+./gradlew :app:assembleRelease
+```
+
+- `minSdk` 24, `targetSdk`/`compileSdk` 35, Java 17.
+- Release builds are minified and resource-shrunk.
+- Signing is not configured; add your own keystore before shipping a release build.
+
+Toolchain: AGP 8.7.3, Kotlin 2.0.21, Compose BOM 2024.10.01, Gradle 8.11.1 (wrapper included).

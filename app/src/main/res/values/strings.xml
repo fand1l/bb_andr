@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Block Puzzle</string>
+
+    <string name="best">Best</string>
+    <string name="combo_value">Combo x%1$d</string>
+    <string name="all_clear">All clear!</string>
+
+    <string name="game_over">Game over</string>
+    <string name="game_over_no_moves">No piece fits any more</string>
+    <string name="new_best">New best score!</string>
+    <string name="play_again">Play again</string>
+    <string name="close">Close</string>
+
+    <string name="stats_lines">Lines cleared</string>
+    <string name="stats_pieces">Pieces placed</string>
+    <string name="stats_best_combo">Longest combo</string>
+
+    <string name="settings">Settings</string>
+    <string name="sound">Sound effects</string>
+    <string name="haptics">Vibration</string>
+    <string name="restart">Restart game</string>
+    <string name="reset_best">Reset best score</string>
+    <string name="no_ads_note">No ads, no tracking, no internet permission.</string>
+
+    <string name="cd_settings">Open settings</string>
+    <string name="cd_restart">Restart</string>
+    <string name="cd_board">Playfield</string>
+    <string name="cd_tray">Pieces to place</string>
+</resources>
