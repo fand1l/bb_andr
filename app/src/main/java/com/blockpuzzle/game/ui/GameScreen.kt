@@ -239,8 +239,8 @@ fun GameScreen(viewModel: GameViewModel, modifier: Modifier = Modifier) {
         SettingsDialog(
             soundEnabled = viewModel.soundEnabled,
             hapticsEnabled = viewModel.hapticsEnabled,
-            onSoundChange = viewModel::setSoundEnabled,
-            onHapticsChange = viewModel::setHapticsEnabled,
+            onSoundChange = { viewModel.soundEnabled = it },
+            onHapticsChange = { viewModel.hapticsEnabled = it },
             onRestart = {
                 viewModel.newGame()
                 showSettings = false

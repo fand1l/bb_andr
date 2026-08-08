@@ -41,11 +41,33 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
     var moveSerial by mutableIntStateOf(0)
         private set
 
-    var soundEnabled by mutableStateOf(prefs.soundEnabled)
-        private set
+    private val soundState = mutableStateOf(prefs.soundEnabled)
+    private val hapticsState = mutableStateOf(prefs.hapticsEnabled)
 
-    var hapticsEnabled by mutableStateOf(prefs.hapticsEnabled)
-        private set
+    /**
+     * Sound toggle. Assigning applies the change to the audio engine and persists it, so
+     * the UI can bind straight to the property.
+     *
+     * Declared with explicit accessors rather than a `by mutableStateOf` property plus a
+     * `setSoundEnabled` helper: those two compile to the same `setSoundEnabled(Z)V` JVM
+     * signature and clash.
+     */
+    var soundEnabled: Boolean
+        get() = soundState.value
+        set(value) {
+            soundState.value = value
+            sound.enabled = value
+            prefs.soundEnabled = value
+        }
+
+    /** Vibration toggle; assigning applies and persists it. */
+    var hapticsEnabled: Boolean
+        get() = hapticsState.value
+        set(value) {
+            hapticsState.value = value
+            haptics.enabled = value
+            prefs.hapticsEnabled = value
+        }
 
     /** True once any drop in the current run has beaten the stored record. */
     var beatenRecordThisRun by mutableStateOf(false)
@@ -120,18 +142,6 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
 
         persist()
         return true
-    }
-
-    fun setSoundEnabled(value: Boolean) {
-        soundEnabled = value
-        sound.enabled = value
-        prefs.soundEnabled = value
-    }
-
-    fun setHapticsEnabled(value: Boolean) {
-        hapticsEnabled = value
-        haptics.enabled = value
-        prefs.hapticsEnabled = value
     }
 
     /**
