@@ -6,6 +6,8 @@ package com.blockpuzzle.engine
  * @param tray always [PieceGenerator.TRAY_SIZE] long; a used slot is null until the whole
  *   tray empties and a new one is dealt.
  * @param combo length of the current clearing streak; 0 when the last drop wiped nothing.
+ * @param dealsSinceGift deals since the last tailored tray; persisted so the cooldown cannot
+ *   be reset by closing the app.
  */
 data class GameState(
     val board: Board,
@@ -17,6 +19,7 @@ data class GameState(
     val linesCleared: Int,
     val piecesPlaced: Int,
     val isOver: Boolean,
+    val dealsSinceGift: Int = 0,
 ) {
     val trayPieces: List<Piece> get() = tray.filterNotNull()
 

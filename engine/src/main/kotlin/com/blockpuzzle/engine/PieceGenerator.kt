@@ -25,20 +25,43 @@ import kotlin.random.Random
  *
  * A tray also never holds three copies of the same silhouette.
  *
+ * Layered on top, and rarely: a **tailored tray**. Every so often — governed by [gifts] —
+ * the dealer stops rolling and goes looking for the three silhouettes that open the current
+ * board up the most, so a big clear, and now and then a complete wipe, is something the
+ * player gets a real shot at rather than a theoretical possibility that never lines up.
+ * It is still only an opportunity: the tray makes a clearing line of play exist, and finding
+ * it stays the player's job.
+ *
  * @param uidSeed first identity handed out; bump it when restoring a save so restored pieces
  *   and newly rolled ones cannot collide.
+ * @param dealsSinceGiftSeed restores the cooldown, so closing the app cannot farm tailored
+ *   trays by resetting it.
  */
 class PieceGenerator(
     private val random: Random = Random.Default,
     private val shapes: List<Shape> = Shapes.ALL,
     private val fair: Boolean = true,
     uidSeed: Int = 1,
+    private val gifts: GiftPolicy = GiftPolicy(),
+    dealsSinceGiftSeed: Int = 0,
 ) {
 
     private var nextUid: Int = uidSeed
 
     /** Highest uid handed out so far; persisted so restored games keep unique identities. */
     val lastUid: Int get() = nextUid - 1
+
+    /** Deals since the last tailored tray. Persisted alongside the board. */
+    var dealsSinceGift: Int = dealsSinceGiftSeed
+        private set
+
+    /** Whether the most recent deal was tailored. Not persisted; used by tests and stats. */
+    var lastDealWasGift: Boolean = false
+        private set
+
+    /** Whether that tailored tray can take the whole board off. Not persisted. */
+    var lastGiftSweeps: Boolean = false
+        private set
 
     private fun weightedPick(pool: List<Shape>): Shape {
         val total = pool.sumOf { it.weight }
@@ -59,13 +82,72 @@ class PieceGenerator(
 
     /** Deals a tray of [count] pieces for [board]. See the class docs for the guarantee. */
     fun nextTray(board: Board, count: Int = TRAY_SIZE): List<Piece> {
-        if (!fair) return rollTray(count)
+        lastDealWasGift = false
+        lastGiftSweeps = false
+        if (!fair) {
+            dealsSinceGift++
+            return rollTray(count)
+        }
+
+        val attempt = giftAttempt(board)
+        if (attempt != GiftAttempt.NONE) {
+            val gift = GiftDealer.bestTray(board, shapes, count, gifts.beamWidth, random)
+            // A tailored tray that cannot deliver what this attempt was after is not worth the
+            // cooldown, so a weak result falls through to an ordinary deal without spending it.
+            val worthDealing = when {
+                gift == null -> false
+                attempt == GiftAttempt.SWEEP -> gift.reachedEmpty
+                else -> gift.linesCleared >= gifts.minLines
+            }
+            if (gift != null && worthDealing) {
+                dealsSinceGift = 0
+                lastDealWasGift = true
+                lastGiftSweeps = gift.reachedEmpty
+                return gift.shapes.map { materialise(it) }
+            }
+        }
+        dealsSinceGift++
 
         repeat(ROLL_ATTEMPTS) {
             val candidate = rollTray(count)
             if (TraySolver.canPlaceAll(board, candidate)) return candidate
         }
         return dealBySimulation(board, count)
+    }
+
+    /**
+     * Whether to go looking for a tailored tray this deal, and what would justify one.
+     *
+     * The ordinary path is gated on three things: enough deals since the last tailored tray,
+     * a board with enough on it that clearing means something, and a roll of the dice. The
+     * odds improve when the board is getting away from the player, which is when the treat is
+     * worth having.
+     *
+     * On top of that, a dense board gets hunted for a clean sweep on nearly every deal.
+     * Taking the whole board off needs a position that is already close to complete; that
+     * window is narrow and short-lived, so waiting for a cooldown would mean it almost never
+     * comes up. Nothing is spent unless the search actually finds a sweep.
+     */
+    private fun giftAttempt(board: Board): GiftAttempt {
+        val cells = board.size * board.size
+        if (cells <= 0) return GiftAttempt.NONE
+        val fillPercent = board.filledCount * 100 / cells
+
+        if (dealsSinceGift >= gifts.minGap && fillPercent >= gifts.minFillPercent) {
+            val chance = if (fillPercent >= gifts.rescueFillPercent) {
+                gifts.rescueChancePercent
+            } else {
+                gifts.chancePercent
+            }
+            if (chance > 0 && random.nextInt(100) < chance) return GiftAttempt.OPENER
+        }
+
+        if (dealsSinceGift >= gifts.sweepMinGap &&
+            GiftDealer.sweepPlausible(board, gifts.sweepSpanLimit, gifts.sweepHoleBudget)
+        ) {
+            return GiftAttempt.SWEEP
+        }
+        return GiftAttempt.NONE
     }
 
     /** An ordinary weighted roll, with the no-triplicates rule and no board awareness. */

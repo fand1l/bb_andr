@@ -17,9 +17,10 @@ class BlockPuzzleGame(
     private val rules: ScoreRules = ScoreRules(),
     private val boardSize: Int = BOARD_SIZE,
     private val fairDeals: Boolean = true,
+    private val gifts: GiftPolicy = GiftPolicy(),
 ) {
 
-    private var generator = PieceGenerator(random = random, fair = fairDeals)
+    private var generator = PieceGenerator(random = random, fair = fairDeals, gifts = gifts)
 
     private var board: Board = Board.empty(boardSize)
     private var tray: MutableList<Piece?> = MutableList(PieceGenerator.TRAY_SIZE) { null }
@@ -43,6 +44,7 @@ class BlockPuzzleGame(
             linesCleared = linesCleared,
             piecesPlaced = piecesPlaced,
             isOver = over,
+            dealsSinceGift = generator.dealsSinceGift,
         )
 
     /** Resets everything except the personal best, which survives across games. */
@@ -55,7 +57,12 @@ class BlockPuzzleGame(
         piecesPlaced = 0
         over = false
         best = keepBest
-        generator = PieceGenerator(random = random, fair = fairDeals, uidSeed = generator.lastUid + 1)
+        generator = PieceGenerator(
+            random = random,
+            fair = fairDeals,
+            uidSeed = generator.lastUid + 1,
+            gifts = gifts,
+        )
         tray = generator.nextTray(board).toMutableList<Piece?>()
         over = state.isDead()
         return state
@@ -71,7 +78,13 @@ class BlockPuzzleGame(
         bestCombo = snapshot.bestCombo
         linesCleared = snapshot.linesCleared
         piecesPlaced = snapshot.piecesPlaced
-        generator = PieceGenerator(random = random, fair = fairDeals, uidSeed = nextUid)
+        generator = PieceGenerator(
+            random = random,
+            fair = fairDeals,
+            uidSeed = nextUid,
+            gifts = gifts,
+            dealsSinceGiftSeed = snapshot.dealsSinceGift,
+        )
         over = snapshot.isOver || state.isDead()
     }
 
@@ -176,4 +189,10 @@ class BlockPuzzleGame(
 
     /** uid the next generated piece will take; persisted alongside the board. */
     fun nextUid(): Int = generator.lastUid + 1
+
+    /** Whether the tray currently in play was tailored rather than rolled. */
+    val lastDealWasGift: Boolean get() = generator.lastDealWasGift
+
+    /** Whether that tailored tray is capable of taking the whole board off. */
+    val lastGiftSweeps: Boolean get() = generator.lastGiftSweeps
 }

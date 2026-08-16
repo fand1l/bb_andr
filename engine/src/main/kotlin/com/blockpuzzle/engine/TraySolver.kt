@@ -56,53 +56,9 @@ object TraySolver {
 
     // --- bitboard search ---------------------------------------------------------------
 
-    /** A legal anchor for one piece, with the cells it would occupy already packed. */
-    private class Anchor(val mask: Long, val row: Int, val col: Int)
-
     private fun bitSolve(board: Board, pieces: List<Piece>, nodeBudget: Int): List<Placement>? {
-        val size = board.size
-        val rowMasks = LongArray(size) { r -> ((1L shl size) - 1L) shl (r * size) }
-        val colMasks = LongArray(size) { c ->
-            var mask = 0L
-            for (r in 0 until size) mask = mask or (1L shl (r * size + c))
-            mask
-        }
-
-        var start = 0L
-        for (r in 0 until size) {
-            for (c in 0 until size) {
-                if (!board.isEmpty(r, c)) start = start or (1L shl (r * size + c))
-            }
-        }
-
-        // Every anchor of every piece, packed once up front: the search then only ANDs.
-        val anchors: Array<List<Anchor>> = Array(pieces.size) { i ->
-            val cells = pieces[i].cells
-            var base = 0L
-            for (cell in cells) base = base or (1L shl (cell.row * size + cell.col))
-            val height = cells.maxOf { it.row } + 1
-            val width = cells.maxOf { it.col } + 1
-            if (height > size || width > size) {
-                emptyList()
-            } else {
-                val out = ArrayList<Anchor>((size - height + 1) * (size - width + 1))
-                for (row in 0..size - height) {
-                    for (col in 0..size - width) {
-                        // The bounds check above guarantees no cell wraps to the next row,
-                        // so the whole silhouette is a single shift of its base mask.
-                        out += Anchor(base shl (row * size + col), row, col)
-                    }
-                }
-                out
-            }
-        }
-
-        fun settle(occupancy: Long): Long {
-            var clear = 0L
-            for (r in 0 until size) if (occupancy and rowMasks[r] == rowMasks[r]) clear = clear or rowMasks[r]
-            for (c in 0 until size) if (occupancy and colMasks[c] == colMasks[c]) clear = clear or colMasks[c]
-            return occupancy and clear.inv()
-        }
+        val field = BitField(board.size)
+        val anchors: Array<List<Anchor>> = Array(pieces.size) { field.anchorsFor(pieces[it].cells) }
 
         val everySpent = (1 shl pieces.size) - 1
         val seen = OccupancySet()
@@ -119,14 +75,14 @@ object TraySolver {
                 for (anchor in anchors[i]) {
                     if (occupancy and anchor.mask != 0L) continue
                     witness += Placement(i, anchor.row, anchor.col)
-                    if (search(settle(occupancy or anchor.mask), spent or (1 shl i))) return true
+                    if (search(field.settle(occupancy or anchor.mask), spent or (1 shl i))) return true
                     witness.removeAt(witness.lastIndex)
                 }
             }
             return false
         }
 
-        return if (search(start, 0)) witness.toList() else null
+        return if (search(field.occupancyOf(board), 0)) witness.toList() else null
     }
 
     // --- reference search --------------------------------------------------------------

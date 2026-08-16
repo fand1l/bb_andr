@@ -1,5 +1,7 @@
 # Block Puzzle
 
+[![Android](https://github.com/fand1l/bb_andr/actions/workflows/android.yml/badge.svg)](https://github.com/fand1l/bb_andr/actions/workflows/android.yml)
+
 An offline Android block-puzzle game in the Block Blast style — the same core loop, none of
 the advertising. Written in Kotlin with Jetpack Compose.
 
@@ -65,6 +67,38 @@ without this — 1.2% would have been an outright dead hand. The search runs on 
 8x8 playfield is exactly 64 cells, so occupancy is one `Long`) and costs a few tens of
 microseconds per deal.
 
+### Tailored trays
+
+Every so often the dealer stops rolling and goes looking for the three silhouettes that open
+the current board up the most. It is still only an opportunity — the tray makes a clearing
+line of play *exist*, and finding it stays the player's job.
+
+Two things trigger the hunt:
+
+- **An opener**, on a cooldown of several deals and a dice roll, with better odds when the
+  board is getting away from you. It looks for the tray that wipes the most.
+- **A sweep**, whenever taking the whole board off is actually within reach. Emptying an 8x8
+  board with three pieces needs what is left to be concentrated — all of it inside a few rows
+  or a few columns, close enough to complete that one tray can finish them. A single cheap
+  pass rules that out for nearly every position, so the beam search only runs when there is
+  something to find. That window is narrow and short-lived, which is why it does not wait on
+  the long cooldown.
+
+The search optimises for the *emptiest moment* along the line of play rather than the state
+after the last piece — the third piece has to land somewhere, and what the player sees is the
+board going clean.
+
+Simulated over 400 games each way, with a player that plans the whole tray:
+
+| | without tailored trays | with |
+| --- | --- | --- |
+| games containing a full wipe | 2.3% | **13.3%** |
+| mean pieces placed | 141 | 200 |
+| mean score | 1 178 | 1 720 |
+
+Tailored trays land on about 8% of deals. The cooldown is persisted with the save, so closing
+the app cannot farm them.
+
 ### Feel
 
 - The held piece floats about one cell above your finger and keeps the grab point you picked
@@ -86,9 +120,12 @@ app/      Android app: Compose UI, drag and drop, animations, sound, persistence
 ```
 
 Keeping the rules in a plain JVM module is what makes them testable without an emulator.
-`engine/src/test` holds 40 tests, including a fuzz pass that plays 120 complete games with
-random legal drops and asserts the invariants on every turn (cell accounting, no surviving
-full line, monotonic score, combo bookkeeping, unique piece identities, save/restore parity).
+`engine/src/test` holds 64 tests. Among them: a fuzz pass that plays 120 complete games with
+random legal drops and checks the invariants on every turn (cell accounting, no surviving full
+line, monotonic score, combo bookkeeping, unique piece identities, save/restore parity, and
+that every fresh deal can be emptied); and a cross-check of the bitboard search against a
+deliberately simple reference search over 400 random positions, where both have to agree and
+both witnesses have to be playable.
 
 ## Building
 
@@ -129,6 +166,35 @@ In Android Studio the bundled JetBrains Runtime already satisfies this; check it
 ./gradlew :app:assembleDebug  # debug APK -> app/build/outputs/apk/debug/
 ./gradlew :app:assembleRelease
 ```
+
+### Getting an APK without building it
+
+Every push runs the tests and builds a debug APK on GitHub Actions. It is signed with the
+auto-generated debug key, so it installs on a phone as-is:
+
+> Actions → **Android** → the run you want → **Artifacts** → `block-puzzle-debug-apk`
+
+Pushing a `v*` tag additionally builds a release APK and attaches it to a GitHub release.
+That build is signed only if these repository secrets exist, and produces an unsigned
+(therefore uninstallable) APK otherwise:
+
+| Secret | What it holds |
+| --- | --- |
+| `ANDROID_KEYSTORE_BASE64` | the keystore file, base64 encoded |
+| `ANDROID_KEYSTORE_PASSWORD` | keystore password |
+| `ANDROID_KEY_ALIAS` | key alias inside the keystore |
+| `ANDROID_KEY_PASSWORD` | key password |
+
+Creating one, if you do not have a keystore yet:
+
+```bash
+keytool -genkeypair -v -keystore release.jks -keyalg RSA -keysize 2048 \
+        -validity 10000 -alias blockpuzzle
+base64 -w0 release.jks    # paste into ANDROID_KEYSTORE_BASE64
+```
+
+Nothing about signing lives in the repository — `app/build.gradle.kts` reads it from the
+environment and skips signing entirely when it is absent.
 
 - `minSdk` 24, `targetSdk`/`compileSdk` 35, Java 17.
 - Release builds are minified and resource-shrunk.

@@ -4,6 +4,12 @@ plugins {
     alias(libs.plugins.kotlin.compose)
 }
 
+// Release signing comes from the environment, so no keystore or password ever lands in the
+// repository. Read through the provider API rather than System.getenv so the configuration
+// cache tracks it properly. When it is absent the release build still succeeds and simply
+// produces an unsigned APK — useful for checking that R8 is happy without holding a key.
+val releaseKeystore: String? = providers.environmentVariable("ANDROID_KEYSTORE_FILE").orNull
+
 android {
     namespace = "com.blockpuzzle.game"
     compileSdk = 35
@@ -18,8 +24,20 @@ android {
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
+    signingConfigs {
+        if (!releaseKeystore.isNullOrBlank()) {
+            create("release") {
+                storeFile = file(releaseKeystore)
+                storePassword = providers.environmentVariable("ANDROID_KEYSTORE_PASSWORD").orNull
+                keyAlias = providers.environmentVariable("ANDROID_KEY_ALIAS").orNull
+                keyPassword = providers.environmentVariable("ANDROID_KEY_PASSWORD").orNull
+            }
+        }
+    }
+
     buildTypes {
         release {
+            signingConfig = signingConfigs.findByName("release")
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(
